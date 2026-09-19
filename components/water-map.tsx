@@ -12,10 +12,10 @@ const FRANCE_VIEW = {
 
 // Fond de carte clair, open source (Carto Positron)
 const OSM_STYLE = {
-  version: 8,
+  version: 8 as const,
   sources: {
     osm: {
-      type: "raster",
+      type: "raster" as const,
       tiles: ["https://a.tile.openstreetmap.org/{z}/{x}/{y}.png"],
       tileSize: 256,
       attribution: "&copy; OpenStreetMap Contributors",
@@ -25,7 +25,7 @@ const OSM_STYLE = {
   layers: [
     {
       id: "osm",
-      type: "raster",
+      type: "raster" as const,
       source: "osm",
     },
   ],
@@ -38,7 +38,6 @@ export function WaterMap() {
         initialViewState={FRANCE_VIEW}
         mapStyle={OSM_STYLE}
         style={{ width: "100%", height: "100%" }}
-        attributionControl
         cooperativeGestures={false}
       >
         {/* Zoom en haut à gauche, sous la barre de recherche (voir globals.css) */}
