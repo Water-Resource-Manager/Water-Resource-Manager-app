@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { Search, MapPinned } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -18,11 +20,18 @@ type MapInterfaceProps = {
   onOpenChange: (open: boolean) => void;
 };
 
-// Composant utilitaire pour uniformiser l'affichage des lignes de données
-const DataRow = ({ label, value }: { label: string; value: React.ReactNode }) => (
-  <div className="flex flex-col py-1.5">
-    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{label}</span>
-    <span className="text-sm font-medium break-words">
+const DataRow = ({
+  label,
+  value,
+}: {
+  label: string;
+  value: React.ReactNode;
+}) => (
+  <div className="flex flex-col gap-1 py-2">
+    <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+      {label}
+    </span>
+    <span className="text-sm font-medium break-words text-slate-800">
       {value !== null && value !== undefined && value !== "" ? value : "Non renseigné"}
     </span>
   </div>
@@ -40,22 +49,25 @@ export function MapInterface({
   return (
     <>
       <div className="pointer-events-none absolute inset-0 z-10">
-        <div className="pointer-events-auto absolute top-4 left-4 w-[min(calc(100%-2rem),20rem)]">
-          <Input
-            type="search"
-            value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
-            placeholder="Rechercher une ressource…"
-            aria-label="Rechercher une ressource"
-            className="h-10 bg-background/95 shadow-md backdrop-blur-sm"
-          />
+        <div className="pointer-events-auto absolute left-4 top-4 w-[min(calc(100%-2rem),20rem)]">
+          <div className="flex items-center gap-2 rounded-xl border border-slate-200/80 bg-white/90 px-3 py-2.5 shadow-[0_10px_25px_rgba(15,23,42,0.08)] backdrop-blur-md">
+            <Search className="h-4 w-4 text-slate-400" />
+            <Input
+              type="search"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Rechercher une ressource…"
+              aria-label="Rechercher une ressource"
+              className="h-auto border-0 bg-transparent p-0 text-sm shadow-none focus-visible:ring-0 focus-visible:outline-none"
+            />
+          </div>
         </div>
 
-        <div className="pointer-events-auto absolute top-4 right-4">
+        <div className="pointer-events-auto absolute right-4 top-4">
           <Button
             type="button"
-            variant="outline"
-            className="h-10 bg-background/95 shadow-md backdrop-blur-sm"
+            variant="default"
+            className="h-10 rounded-xl bg-teal-700 px-4 text-sm font-medium text-white shadow-[0_10px_25px_rgba(13,148,136,0.22)] hover:bg-teal-800"
             onClick={() => onOpenChange(true)}
           >
             Station sélectionnée
@@ -64,10 +76,23 @@ export function MapInterface({
       </div>
 
       <Sheet open={isDetailsOpen} onOpenChange={onOpenChange}>
-        <SheetContent side="right" className="flex flex-col sm:max-w-md w-full overflow-hidden">
-          <SheetHeader className="pb-4 border-b shrink-0">
-            <SheetTitle>Détails de la ressource</SheetTitle>
-            <SheetDescription>
+        <SheetContent
+          side="right"
+          className="flex w-full flex-col overflow-hidden border-l border-slate-200/80 bg-white/90 sm:max-w-md backdrop-blur-xl"
+        >
+          <SheetHeader className="shrink-0 border-b border-slate-200/80 pb-4">
+            <div className="mb-2 flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-700 text-white shadow-sm">
+                <MapPinned className="h-4 w-4" />
+              </div>
+              <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-teal-700">
+                Station
+              </span>
+            </div>
+            <SheetTitle className="font-[family-name:var(--font-display)] text-2xl font-semibold text-slate-900">
+              {selectedStation ? stationName : "Détails de la ressource"}
+            </SheetTitle>
+            <SheetDescription className="text-sm text-slate-500">
               {selectedStation
                 ? `Station de surveillance sur ${stationName}`
                 : "Sélectionnez une station pour afficher ses détails."}
@@ -75,93 +100,132 @@ export function MapInterface({
           </SheetHeader>
 
           {selectedStation && (
-            <div className="flex-1 overflow-y-auto pr-4 -mr-4 space-y-6 py-4">
-              {/* 1. Identification de l'ouvrage */}
-              <section>
-                <h3 className="text-sm font-bold text-primary mb-2">Identification de l'ouvrage</h3>
-                <div className="space-y-1 bg-muted/50 p-3 rounded-lg">
-                  <DataRow label="Identification de la station (code BSS)" value={selectedStation.code_bss} />
-                  <DataRow label="Identifiant unique (bss_id)" value={selectedStation.bss_id} />
-                  <DataRow 
-                    label="Lien vers la fiche technique (ADES)" 
+            <div className="flex-1 space-y-5 overflow-y-auto py-4 pr-4 -mr-4">
+              <section className="rounded-2xl border border-slate-200/80 bg-slate-50/80 p-4">
+                <p className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                  Identification
+                </p>
+                <div className="space-y-1">
+                  <DataRow label="Code BSS" value={selectedStation.code_bss} />
+                  <DataRow label="Identifiant BSS" value={selectedStation.bss_id} />
+                  <DataRow
+                    label="Fiche technique"
                     value={
                       selectedStation.urn_bss ? (
-                        <a href={selectedStation.urn_bss} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-                          Consulter la fiche technique ↗
+                        <a
+                          href={selectedStation.urn_bss}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-teal-700 underline decoration-teal-300 underline-offset-4 hover:text-teal-800"
+                        >
+                          Consulter la fiche ↗
                         </a>
                       ) : null
-                    } 
+                    }
                   />
                 </div>
               </section>
 
-              {/* 2. Localisation géographique */}
-              <section>
-                <h3 className="text-sm font-bold text-primary mb-2">Localisation géographique</h3>
-                <div className="space-y-1 bg-muted/50 p-3 rounded-lg">
+              <section className="rounded-2xl border border-slate-200/80 bg-slate-50/80 p-4">
+                <p className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                  Localisation
+                </p>
+                <div className="space-y-1">
                   <DataRow label="Commune" value={selectedStation.nom_commune} />
-                  <DataRow 
-                    label="Département" 
+                  <DataRow
+                    label="Département"
                     value={
-                      selectedStation.nom_departement && selectedStation.code_departement 
-                        ? `${selectedStation.nom_departement} (${selectedStation.code_departement})` 
+                      selectedStation.nom_departement && selectedStation.code_departement
+                        ? `${selectedStation.nom_departement} (${selectedStation.code_departement})`
                         : selectedStation.nom_departement || selectedStation.code_departement
-                    } 
+                    }
                   />
-                  <DataRow 
-                    label="Coordonnées GPS de la station" 
+                  <DataRow
+                    label="Coordonnées GPS"
                     value={
                       selectedStation.longitude && selectedStation.latitude ? (
-                        <div className="flex flex-col">
+                        <div className="flex flex-col gap-1">
                           <span>Lon / Lat : {selectedStation.longitude} / {selectedStation.latitude}</span>
                           {selectedStation.x && selectedStation.y && (
-                            <span className="text-muted-foreground text-xs mt-0.5">Lambert 93 : {selectedStation.x} / {selectedStation.y}</span>
+                            <span className="text-xs text-slate-500">
+                              Lambert 93 : {selectedStation.x} / {selectedStation.y}
+                            </span>
                           )}
                         </div>
                       ) : null
-                    } 
+                    }
                   />
                 </div>
               </section>
 
-              {/* 3. Caractéristiques techniques de la station */}
-              <section>
-                <h3 className="text-sm font-bold text-primary mb-2">Caractéristiques techniques</h3>
-                <div className="space-y-1 bg-muted/50 p-3 rounded-lg">
-                  <DataRow 
-                    label="Profondeur de l'ouvrage" 
-                    value={selectedStation.profondeur_investigation ? `${selectedStation.profondeur_investigation} mètres` : null} 
+              <section className="rounded-2xl border border-slate-200/80 bg-slate-50/80 p-4">
+                <p className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                  Caractéristiques
+                </p>
+                <div className="space-y-1">
+                  <DataRow
+                    label="Profondeur"
+                    value={
+                      selectedStation.profondeur_investigation
+                        ? `${selectedStation.profondeur_investigation} m`
+                        : null
+                    }
                   />
-                  <DataRow 
-                    label="Altitude du sol au niveau de l'ouvrage" 
-                    value={selectedStation.altitude_station ? `${selectedStation.altitude_station} m NGF` : null} 
+                  <DataRow
+                    label="Altitude"
+                    value={
+                      selectedStation.altitude_station
+                        ? `${selectedStation.altitude_station} m NGF`
+                        : null
+                    }
                   />
-                  <DataRow 
-                    label="Altitude de référence du repère" 
-                    value={selectedStation.altitude_repere ? `${selectedStation.altitude_repere} m NGF` : null} 
+                  <DataRow
+                    label="Repère"
+                    value={
+                      selectedStation.altitude_repere
+                        ? `${selectedStation.altitude_repere} m NGF`
+                        : null
+                    }
                   />
                 </div>
               </section>
 
-              {/* 4. Couverture temporelle des données */}
-              <section>
-                <h3 className="text-sm font-bold text-primary mb-2">Couverture temporelle</h3>
-                <div className="space-y-1 bg-muted/50 p-3 rounded-lg">
-                  <DataRow 
-                    label="Date de première mesure" 
-                    value={selectedStation.date_debut_mesure ? new Date(selectedStation.date_debut_mesure).toLocaleDateString("fr-FR") : null} 
+              <section className="rounded-2xl border border-slate-200/80 bg-slate-50/80 p-4">
+                <p className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                  Couverture temporelle
+                </p>
+                <div className="space-y-1">
+                  <DataRow
+                    label="Première mesure"
+                    value={
+                      selectedStation.date_debut_mesure
+                        ? new Date(selectedStation.date_debut_mesure).toLocaleDateString("fr-FR")
+                        : null
+                    }
                   />
-                  <DataRow 
-                    label="Date de la dernière mesure relevée" 
-                    value={selectedStation.date_fin_mesure ? new Date(selectedStation.date_fin_mesure).toLocaleDateString("fr-FR") : null} 
+                  <DataRow
+                    label="Dernière mesure"
+                    value={
+                      selectedStation.date_fin_mesure
+                        ? new Date(selectedStation.date_fin_mesure).toLocaleDateString("fr-FR")
+                        : null
+                    }
                   />
-                  <DataRow 
-                    label="Nombre de relevés disponibles" 
-                    value={selectedStation.nb_mesures_piezo ? new Intl.NumberFormat('fr-FR').format(selectedStation.nb_mesures_piezo) : null} 
+                  <DataRow
+                    label="Relevés"
+                    value={
+                      selectedStation.nb_mesures_piezo
+                        ? new Intl.NumberFormat("fr-FR").format(selectedStation.nb_mesures_piezo)
+                        : null
+                    }
                   />
-                  <DataRow 
-                    label="Dernière mise à jour administrative" 
-                    value={selectedStation.date_maj ? new Date(selectedStation.date_maj).toLocaleDateString("fr-FR") : null} 
+                  <DataRow
+                    label="Mise à jour"
+                    value={
+                      selectedStation.date_maj
+                        ? new Date(selectedStation.date_maj).toLocaleDateString("fr-FR")
+                        : null
+                    }
                   />
                 </div>
               </section>

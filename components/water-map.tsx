@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import Map, { NavigationControl, Marker } from "react-map-gl/maplibre";
+import type { MapRef } from "react-map-gl/maplibre";
 import "maplibre-gl/dist/maplibre-gl.css";
+import Supercluster from "supercluster";
 
 export type HubEauStationProperties = {
   code_bss: string | null;
@@ -31,6 +33,7 @@ type WaterMapProps = {
 };
 
 const FRANCE_VIEW = { longitude: 2.2137, latitude: 46.2276, zoom: 5.5 };
+
 const OSM_STYLE = {
   version: 8 as const,
   sources: {
@@ -45,17 +48,20 @@ const OSM_STYLE = {
   layers: [{ id: "osm", type: "raster" as const, source: "osm" }],
 };
 
-const HUBEAU_STATIONS_URL = "https://hubeau.eaufrance.fr/api/v1/niveaux_nappes/stations?format=geojson&size=1000";
+const HUBEAU_STATIONS_URL = "/stations.json";
 
 export function WaterMap({ onStationSelect }: WaterMapProps) {
+  const mapRef = useRef<MapRef>(null);
   const [geoData, setGeoData] = useState<any>(null);
-  // Nouvel état pour surveiller l'API en temps réel
   const [apiStatus, setApiStatus] = useState<"loading" | "error" | "ready">("loading");
+  
+  // États pour surveiller la fenêtre de la carte (pour le calcul des clusters)
+  const [bounds, setBounds] = useState<[number, number, number, number]>([-5.5, 41.3, 9.6, 51.1]); // Bbox France par défaut
+  const [zoom, setZoom] = useState(FRANCE_VIEW.zoom);
 
   useEffect(() => {
     setApiStatus("loading");
     
-    // On ajoute 'cache: "no-store"' pour forcer le navigateur et Next.js à récupérer de nouvelles données
     fetch(HUBEAU_STATIONS_URL, { cache: "no-store" })
       .then((response) => {
         if (!response.ok) throw new Error(`Erreur HTTP: ${response.status}`);
@@ -72,50 +78,94 @@ export function WaterMap({ onStationSelect }: WaterMapProps) {
       });
   }, []);
 
+  // 1. Initialisation du moteur de clustering Supercluster
+  const supercluster = useMemo(() => {
+    if (!geoData?.features) return null;
+    const sc = new Supercluster({ radius: 50, maxZoom: 14 });
+    sc.load(geoData.features);
+    return sc;
+  }, [geoData]);
+
+  // 2. Récupération des points à afficher en fonction du zoom et du déplacement
+  const clusters = useMemo(() => {
+    if (!supercluster || !bounds) return [];
+    return supercluster.getClusters(bounds, Math.floor(zoom));
+  }, [supercluster, bounds, zoom]);
+
+  // Met à jour les limites de la carte lors des mouvements
+  const updateMapState = () => {
+    if (!mapRef.current) return;
+    const b = mapRef.current.getBounds();
+    setBounds([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]);
+    setZoom(mapRef.current.getZoom());
+  };
+
   return (
-    <div className="absolute inset-0">
-      
-      {/* Messages d'état superposés à la carte */}
+    <div className="absolute inset-0 bg-slate-50">
       {apiStatus === "loading" && (
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 bg-white/90 px-4 py-2 rounded-md shadow-md text-sm font-medium animate-pulse text-gray-700">
-          Téléchargement des stations depuis Hub'Eau...
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 bg-white/95 px-5 py-3 rounded-xl shadow-lg text-sm font-medium animate-pulse text-teal-800 border border-teal-100">
+          Téléchargement du réseau national (jusqu'à 20 000 stations)...
         </div>
       )}
       {apiStatus === "error" && (
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 bg-red-100 text-red-800 px-4 py-2 rounded-md shadow-md text-sm font-medium border border-red-200">
-          Erreur de connexion à l'API Hub'Eau. L'accès est peut-être temporairement limité (attendez 1 minute).
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 bg-red-100 text-red-800 px-5 py-3 rounded-xl shadow-lg text-sm font-medium border border-red-200">
+          Erreur de connexion à l'API Hub'Eau.
         </div>
       )}
 
       <Map
+        ref={mapRef}
         initialViewState={FRANCE_VIEW}
         mapStyle={OSM_STYLE}
         style={{ width: "100%", height: "100%" }}
         cooperativeGestures={false}
+        onMove={updateMapState}
+        onLoad={updateMapState}
       >
-        {geoData?.features?.map((feature: any, index: number) => {
-          const coordinates = feature.geometry?.coordinates;
-          if (!coordinates) return null;
+        {clusters.map((cluster, index) => {
+          const [longitude, latitude] = cluster.geometry.coordinates;
+          const { cluster: isCluster, point_count: pointCount } = cluster.properties || {};
 
+          // --- AFFICHAGE D'UN GROUPE (CLUSTER) ---
+          if (isCluster) {
+            // Calcul de la taille de la bulle selon le nombre de points
+            const size = Math.min(60, Math.max(30, 25 + (pointCount / 500) * 10));
+
+            return (
+              <Marker key={`cluster-${cluster.id}`} longitude={longitude} latitude={latitude}>
+                <div
+                  className="bg-teal-700 text-white rounded-full flex items-center justify-center font-bold border-2 border-white shadow-md cursor-pointer hover:bg-teal-800 transition-colors"
+                  style={{ width: `${size}px`, height: `${size}px`, fontSize: pointCount > 999 ? '11px' : '13px' }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!supercluster) return;
+                    const expansionZoom = Math.min(supercluster.getClusterExpansionZoom(cluster.id as number), 20);
+                    mapRef.current?.easeTo({
+                      center: [longitude, latitude],
+                      zoom: expansionZoom,
+                      duration: 500,
+                    });
+                  }}
+                >
+                  {new Intl.NumberFormat("fr-FR").format(pointCount)}
+                </div>
+              </Marker>
+            );
+          }
+
+          // --- AFFICHAGE D'UNE STATION INDIVIDUELLE ---
           return (
-            <Marker
-              key={feature.properties.code_bss || index}
-              longitude={coordinates[0]}
-              latitude={coordinates[1]}
-              anchor="center"
-              onClick={(e) => {
-                e.originalEvent.stopPropagation();
-                const stationData: HubEauStationProperties = {
-                  ...feature.properties,
-                  longitude: coordinates[0],
-                  latitude: coordinates[1]
-                };
-                onStationSelect(stationData);
-              }}
-            >
-              <div 
-                className="w-3.5 h-3.5 bg-blue-600 border-2 border-white rounded-full shadow-sm cursor-pointer hover:bg-blue-800 hover:scale-125 transition-transform"
-                title={feature.properties.nom_commune || "Station"}
+            <Marker key={`station-${cluster.properties.code_bss || index}`} longitude={longitude} latitude={latitude}>
+              <div
+                className="w-4 h-4 bg-teal-500 border-2 border-white rounded-full shadow-sm cursor-pointer hover:scale-150 transition-transform hover:bg-teal-700"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onStationSelect({
+                    ...cluster.properties,
+                    longitude,
+                    latitude,
+                  } as HubEauStationProperties);
+                }}
               />
             </Marker>
           );
