@@ -1,6 +1,6 @@
 # Architecture des Données Hub'Eau (POC vs PROD)
 
-Ce document décrit la stratégie de gestion des données du réseau piézométrique Hub'Eau, séparant le référentiel géographique (données "froides") de l'historique des relevés (données "chaudes").
+Ce document décrit la stratégie de gestion des données du réseau piézométrique Hub'Eau, séparant le référentiel géographique (données "froides") de l'historique des relevés (données "chaudes"), ainsi que la gestion des couches de la carte.
 
 ## 1. Référentiel des Stations (Données Froides)
 
@@ -23,3 +23,11 @@ Ce document décrit la stratégie de gestion des données du réseau piézométr
 - **Méthode** : Appels directs à l'API Hub'Eau (`/api/v1/niveaux_nappes/chroniques`).
 - **Déclenchement** : Uniquement à la demande (au clic sur un marqueur de la carte ou à l'ouverture de la page d'analyse).
 - **Objectif** : Ne pas surcharger notre infrastructure avec des millions de séries temporelles, et garantir l'affichage de la valeur la plus récente certifiée par l'État.
+
+## 3. Gestion des Couches Cartographiques (Layers)
+
+**Vision Architecturale (En préparation)**
+- **Séparation des responsabilités** : Le composant de la carte (`water-map.tsx`) sera agnostique. Il ne contiendra aucune donnée en dur.
+- **Catalogue de configuration** : Création d'un système de templates (`LayerConfig`) stocké dans un dossier dédié (ex: `config/map-layers.ts`). Chaque couche (Piézomètres, Pluviométrie, Bassins versants) aura sa propre configuration standardisée (ID, source, style WebGL/Cluster).
+- **Store Global** : Un gestionnaire d'état pilotera un tableau `activeLayers`. Un sélecteur de couches en UI viendra simplement modifier ce tableau pour afficher/masquer les couches.
+- **Évolutivité** : Cette architecture permettra à terme l'import de données personnalisées (upload GeoJSON par l'utilisateur), converties à la volée au format `LayerConfig` et injectées dans le store.
