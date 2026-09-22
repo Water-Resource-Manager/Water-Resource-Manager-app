@@ -1,6 +1,6 @@
 # Architecture des Données Hub'Eau (POC vs PROD)
 
-Ce document décrit la stratégie de gestion des données du réseau piézométrique Hub'Eau, séparant le référentiel géographique (données "froides") de l'historique des relevés (données "chaudes"), ainsi que la gestion des couches de la carte.
+Ce document décrit la stratégie de gestion des données du réseau piézométrique Hub'Eau, séparant le référentiel géographique (données "froides") de l'historique des relevés (données "chaudes"), ainsi que la gestion multicouche de la carte.
 
 ## 1. Référentiel des Stations (Données Froides)
 
@@ -21,13 +21,14 @@ Ce document décrit la stratégie de gestion des données du réseau piézométr
 
 **État Actuel & Cible (POC et Production)**
 - **Méthode** : Appels directs à l'API Hub'Eau (`/api/v1/niveaux_nappes/chroniques`).
-- **Déclenchement** : Uniquement à la demande (au clic sur un marqueur de la carte ou à l'ouverture de la page d'analyse).
-- **Objectif** : Ne pas surcharger notre infrastructure avec des millions de séries temporelles, et garantir l'affichage de la valeur la plus récente certifiée par l'État.
+- **Déclenchement** : Uniquement à la demande (au clic sur un marqueur). Requête dynamiquement calculée sur **une année glissante** avec encodage sécurisé de l'identifiant BSS.
+- **Objectif** : Ne pas surcharger l'infrastructure avec des millions de séries temporelles, et garantir l'affichage de la valeur la plus récente certifiée par l'État pour les graphiques de tendance (ECharts).
 
 ## 3. Gestion des Couches Cartographiques (Layers)
 
-**Vision Architecturale (En préparation)**
-- **Séparation des responsabilités** : Le composant de la carte (`water-map.tsx`) sera agnostique. Il ne contiendra aucune donnée en dur.
-- **Catalogue de configuration** : Création d'un système de templates (`LayerConfig`) stocké dans un dossier dédié (ex: `config/map-layers.ts`). Chaque couche (Piézomètres, Pluviométrie, Bassins versants) aura sa propre configuration standardisée (ID, source, style WebGL/Cluster).
-- **Store Global** : Un gestionnaire d'état pilotera un tableau `activeLayers`. Un sélecteur de couches en UI viendra simplement modifier ce tableau pour afficher/masquer les couches.
-- **Évolutivité** : Cette architecture permettra à terme l'import de données personnalisées (upload GeoJSON par l'utilisateur), converties à la volée au format `LayerConfig` et injectées dans le store.
+**Architecture Implémentée (Zustand + Config Catalogue)**
+- **Catalogue de configuration (`config/map-layers.ts`)** : Fichier centralisant le contrat de données (`MapLayerConfig`). Chaque couche y est déclarée avec son ID, sa source, son type et son design (couleur, visibilité par défaut).
+- **Store Global (`store/map-store.ts`)** : Gestionnaire d'état léger (Zustand) pilotant le tableau `activeLayerIds`. Il permet de mémoriser et de modifier l'état des couches de n'importe où dans l'application.
+- **Moteur de rendu (`water-map.tsx`)** : Totalement agnostique, le composant carte lit la configuration et le store pour déterminer quelles données instancier et afficher dynamiquement.
+- **Sélecteur UI (`layer-selector.tsx`)** : Contrôleur flottant générant automatiquement la liste des options depuis le catalogue, permettant l'activation/désactivation instantanée (sans rechargement réseau) par l'utilisateur.
+- **Évolutivité (Cible)** : Cette fondation modulaire est prête pour l'import de données personnalisées (upload GeoJSON par l'utilisateur), qui seront converties à la volée en objet `MapLayerConfig` et poussées dans le store.

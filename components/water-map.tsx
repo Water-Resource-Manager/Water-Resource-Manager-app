@@ -5,6 +5,9 @@ import Map, { NavigationControl, Marker } from "react-map-gl/maplibre";
 import type { MapRef } from "react-map-gl/maplibre";
 import "maplibre-gl/dist/maplibre-gl.css";
 import Supercluster from "supercluster";
+import { useMapStore } from "@/store/map-store";
+import { MAP_LAYERS } from "@/config/map-layers";
+import { LayerSelector } from "@/components/map/layer-selector";
 
 export type HubEauStationProperties = {
   code_bss: string | null;
@@ -48,9 +51,8 @@ const OSM_STYLE = {
   layers: [{ id: "osm", type: "raster" as const, source: "osm" }],
 };
 
-const HUBEAU_STATIONS_URL = "/stations.json";
-
 export function WaterMap({ onStationSelect }: WaterMapProps) {
+  const { activeLayerIds } = useMapStore();
   const mapRef = useRef<MapRef>(null);
   const [geoData, setGeoData] = useState<any>(null);
   const [apiStatus, setApiStatus] = useState<"loading" | "error" | "ready">("loading");
@@ -62,7 +64,8 @@ export function WaterMap({ onStationSelect }: WaterMapProps) {
   useEffect(() => {
     setApiStatus("loading");
     
-    fetch(HUBEAU_STATIONS_URL, { cache: "no-store" })
+    const hubeauConfig = MAP_LAYERS.find(l => l.id === "hubeau-piezometrie");
+    fetch(hubeauConfig?.sourceUrl || "/stations.json", { cache: "no-store" })
       .then((response) => {
         if (!response.ok) throw new Error(`Erreur HTTP: ${response.status}`);
         return response.json();
@@ -122,7 +125,8 @@ export function WaterMap({ onStationSelect }: WaterMapProps) {
         onMove={updateMapState}
         onLoad={updateMapState}
       >
-        {clusters.map((cluster, index) => {
+        {activeLayerIds.includes("hubeau-piezometrie") && clusters.map((cluster, index) => {
+        
           const [longitude, latitude] = cluster.geometry.coordinates;
           const { cluster: isCluster, point_count: pointCount } = cluster.properties || {};
 
@@ -173,6 +177,7 @@ export function WaterMap({ onStationSelect }: WaterMapProps) {
 
         <NavigationControl position="bottom-right" showCompass={false} />
       </Map>
+      <LayerSelector />
     </div>
   );
 }
