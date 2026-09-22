@@ -50,7 +50,7 @@ const OSM_STYLE = {
   layers: [{ id: "osm", type: "raster" as const, source: "osm" }],
 };
 
-export function WaterMap({ onStationSelect }: WaterMapProps) {
+export function WaterMap({ onFeatureSelect }: WaterMapProps) {
   const { activeLayerIds } = useMapStore();
   const mapRef = useRef<MapRef>(null);
   const [geoData, setGeoData] = useState<any>(null);

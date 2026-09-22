@@ -135,3 +135,5 @@ export function Sidebar() {
     </>
   );
 }
+
+// TODO: Ajouter une icône météo quand on intègrera la couche API Météo-France
