@@ -16,17 +16,18 @@ export const MAP_LAYERS: MapLayerConfig[] = [
     name: "Réseau Piézométrique (Hub'Eau)",
     description: "Stations nationales de mesure des nappes souterraines.",
     type: "points",
-    sourceUrl: "/stations.json", // Notre fichier local mocké
-    color: "#0f766e", // Le "teal-700" de notre UI
-    visibleByDefault: true,
+    sourceUrl: "/stations.json",
+    color: "#0f766e",
+    visibleByDefault: false,
   },
-  // Exemple d'une future couche que nous pourrions ajouter plus tard :
-  // {
-  //   id: "bassins-versants",
-  //   name: "Bassins Versants",
-  //   type: "polygons",
-  //   sourceUrl: "/api/bassins",
-  //   color: "#3b82f6",
-  //   visibleByDefault: false,
-  // }
+
+  {
+    id: "qualite-nappes",
+    name: "Qualité des nappes (Analyses)",
+    type: "points",
+    sourceUrl: "/stations-qualite.json",
+    description: "Stations de prélèvement physico-chimique (ADES/Naïades)",
+    color: "#8B5CF6",
+    visibleByDefault: false,
+  }
 ];
