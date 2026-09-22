@@ -32,8 +32,7 @@ export type HubEauStationProperties = {
 };
 
 type WaterMapProps = {
-  onStationSelect: (station: HubEauStationProperties) => void;
-};
+  onFeatureSelect: (feature: { layerId: string; properties: any }) => void;};
 
 const FRANCE_VIEW = { longitude: 2.2137, latitude: 46.2276, zoom: 5.5 };
 
@@ -164,11 +163,17 @@ export function WaterMap({ onStationSelect }: WaterMapProps) {
                 className="w-4 h-4 bg-teal-500 border-2 border-white rounded-full shadow-sm cursor-pointer hover:scale-150 transition-transform hover:bg-teal-700"
                 onClick={(e) => {
                   e.stopPropagation();
-                  onStationSelect({
-                    ...cluster.properties,
-                    longitude,
-                    latitude,
-                  } as HubEauStationProperties);
+                  
+                  // NOUVEAU COMPORTEMENT ICI : on envoie la "Feature" avec son layerId
+                  onFeatureSelect({
+                    layerId: "hubeau-piezometrie",
+                    properties: {
+                      ...cluster.properties,
+                      longitude,
+                      latitude,
+                    }
+                  });
+                  
                 }}
               />
             </Marker>
