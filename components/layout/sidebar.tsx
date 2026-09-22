@@ -30,6 +30,7 @@ export function Sidebar() {
     { name: "Prédictions IA", href: "/predictions", icon: Sparkles },
     { name: "Synoptique", href: "/synoptic", icon: LayoutTemplate },
     { name: "Configuration", href: "/settings", icon: Settings },
+    // TODO: Intégrer l'icône de l'API Météo-France dans le menu latéral
   ];
 
   return (
@@ -135,5 +136,3 @@ export function Sidebar() {
     </>
   );
 }
-
-// TODO: Ajouter une icône météo quand on intègrera la couche API Météo-France
