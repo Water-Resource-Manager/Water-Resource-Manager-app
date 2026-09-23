@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { ArrowRight, AlertTriangle, Activity, Database, CheckCircle2 } from "lucide-react";
 
+// 1. Import du composant de favoris
+import { StationsFavorites } from "@/components/stations/stations-favorites";
+
 export default function DashboardPage() {
   return (
     <div className="p-8 space-y-8 max-w-6xl mx-auto">
@@ -60,23 +63,13 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Section des actions guidées */}
+      {/* Section des actions guidées et des favoris */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="rounded-xl border border-slate-200/80 bg-white p-6 shadow-sm">
-          <h2 className="text-base font-semibold text-slate-900 mb-4">Situation des ouvrages</h2>
-          <div className="space-y-3">
-            {["Forage F1 - Les Aires", "Piézomètre PZ-12", "Station de jaugeage - Orb"].map((station, i) => (
-              <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-slate-50 border border-slate-100">
-                <span className="text-sm font-medium text-slate-800">{station}</span>
-                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800">
-                  Normal
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
+        
+        {/* 2. Intégration du composant dynamique à la place de la liste statique */}
+        <StationsFavorites />
 
-        <div className="rounded-xl border border-slate-200/80 bg-white p-6 shadow-sm">
+        <div className="rounded-xl border border-slate-200/80 bg-white p-6 shadow-sm flex flex-col">
           <h2 className="text-base font-semibold text-slate-900 mb-4">Parcours rapides</h2>
           <div className="space-y-3">
             <Link

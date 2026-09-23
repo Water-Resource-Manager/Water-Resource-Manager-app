@@ -1,13 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Map, MousePointerClick, X, Info, Droplets, FlaskConical, MapPin, Loader2 } from "lucide-react";
+// J'ai regroupé tous les imports Lucide ici, en ajoutant 'Star'
+import { Map, MousePointerClick, X, Info, Droplets, FlaskConical, MapPin, Loader2, Star } from "lucide-react";
 import { useMapStore } from "@/store/map-store";
 import { MAP_LAYERS } from "@/config/map-layers";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { QualityChart } from "@/components/charts/quality-chart";
 import { PiezometryChart } from "@/components/charts/piezometry-chart";
 import { PiezometryIndicator } from "@/components/charts/piezometry-indicator";
+import { useFavoritesStore } from "@/store/favorites-store";
 
 export type SelectedFeature = {
   layerId: string;
@@ -34,7 +36,7 @@ function getDistanceInKm(lat1: number, lon1: number, lat2: number, lon2: number)
 // 2. Moteur de recherche spatial par Bounding Box (sécurisé)
 const fetchNearestStation = async (type: "niveaux_nappes" | "qualite_nappes", lat: number, lon: number) => {
   try {
-    const RADIUS_KM = 20; // Rayon de recherche de 20 km
+    const RADIUS_KM = 20; 
     const dLat = RADIUS_KM / 111.32;
     const dLon = RADIUS_KM / (111.32 * Math.cos(lat * (Math.PI / 180)));
     const bbox = `${(lon - dLon).toFixed(4)},${(lat - dLat).toFixed(4)},${(lon + dLon).toFixed(4)},${(lat + dLat).toFixed(4)}`;
@@ -42,13 +44,11 @@ const fetchNearestStation = async (type: "niveaux_nappes" | "qualite_nappes", la
     const url = `https://hubeau.eaufrance.fr/api/v1/${type}/stations?bbox=${bbox}&size=100`;
     const res = await fetch(url);
     
-    // Sécurité si l'API répond avec une erreur (ex: 404, 500)
     if (!res.ok) return null; 
     
     const json = await res.json();
     if (!json.data || json.data.length === 0) return null;
 
-    // On trie les résultats locaux par distance mathématique réelle
     const sorted = json.data.map((st: any) => {
       const stLon = st.geometry?.coordinates?.[0] ?? st.longitude ?? st.x;
       const stLat = st.geometry?.coordinates?.[1] ?? st.geometry?.coordinates?.[1] ?? st.latitude ?? st.y;
@@ -129,10 +129,9 @@ function QualityTabContent({ feature }: { feature: SelectedFeature }) {
   const lat = properties.latitude;
   const lon = properties.longitude;
 
-useEffect(() => {
+  useEffect(() => {
     if (layerId === "hubeau-piezometrie" && lat && lon) {
       setIsSearching(true);
-      // Correction ici : l'API utilise bien "qualite_nappes" (avec un tiret du bas) !
       fetchNearestStation("qualite_nappes", lat, lon)
         .then(setNearest)
         .finally(() => setIsSearching(false));
@@ -177,12 +176,29 @@ useEffect(() => {
 
 // Composant Principal
 export function AssetSidePanel({ feature, onClose }: AssetSidePanelProps) {
+  // Les hooks doivent TOUJOURS être appelés au niveau racine du composant
   const { activeLayerIds } = useMapStore();
+  const { toggleFavorite, isFavorite } = useFavoritesStore();
 
   if (feature) {
     const { layerId, properties } = feature;
     const isGroundwaterResource = layerId === "hubeau-piezometrie" || layerId === "qualite-nappes";
     const isQualityPrimary = layerId === "qualite-nappes";
+
+    // Préparation des données pour le favori
+    const stationId = properties.id || properties.code_bss;
+    const stationName = properties.nom || properties.nom_commune || "Station Inconnue";
+    const isFav = stationId ? isFavorite(stationId) : false;
+
+    const handleToggleFavorite = () => {
+      if (!stationId) return;
+      toggleFavorite({
+        id: stationId,
+        name: stationName,
+        type: layerId as "piezometrie" | "qualite-nappes",
+        coordinates: [properties.longitude || 0, properties.latitude || 0],
+      });
+    };
 
     if (isGroundwaterResource) {
       return (
@@ -191,15 +207,31 @@ export function AssetSidePanel({ feature, onClose }: AssetSidePanelProps) {
           <div className="flex items-center justify-between p-4 border-b border-slate-100 bg-slate-50/50">
             <div>
               <h2 className="font-semibold text-slate-800 text-lg leading-tight pr-2">
-                {properties.nom || properties.nom_commune || "Station Inconnue"}
+                {stationName}
               </h2>
               <p className="text-xs font-medium text-slate-500 mt-1 uppercase tracking-wider">
-                BSS : {properties.id || properties.code_bss || "N/A"}
+                BSS : {stationId || "N/A"}
               </p>
             </div>
-            <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors">
-              <X className="w-5 h-5" />
-            </button>
+            
+            {/* BOUTONS D'ACTION (Favori + Fermer) */}
+            <div className="flex items-center space-x-1 shrink-0">
+              <button
+                onClick={handleToggleFavorite}
+                className={`p-2 rounded-full transition-colors ${
+                  isFav 
+                    ? "text-yellow-500 bg-yellow-50 hover:bg-yellow-100" 
+                    : "text-slate-400 hover:text-yellow-500 hover:bg-slate-50"
+                }`}
+                title={isFav ? "Retirer des favoris" : "Ajouter au panier"}
+              >
+                <Star className="w-5 h-5" fill={isFav ? "currentColor" : "none"} />
+              </button>
+              
+              <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
           </div>
 
           <div className="flex-1 overflow-hidden flex flex-col p-4">
@@ -239,7 +271,6 @@ export function AssetSidePanel({ feature, onClose }: AssetSidePanelProps) {
               <div className="flex-1 overflow-y-auto pr-2 space-y-4">
                 
                 <TabsContent value="identity" className="m-0 space-y-4">
-                  {/* NOUVEAU BLOC : Widget de tendance (Uniquement sur les Piézomètres) */}
                   {layerId === "hubeau-piezometrie" && (
                     <PiezometryIndicator bssId={properties.id || properties.code_bss} />
                   )}

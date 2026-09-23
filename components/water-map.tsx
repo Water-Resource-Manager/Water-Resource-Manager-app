@@ -10,6 +10,7 @@ import { MAP_LAYERS } from "@/config/map-layers";
 import { LayerSelector } from "@/components/map/layer-selector";
 import { SearchBar } from "@/components/map/search-bar";
 import { BaseMapSelector } from "@/components/map/base-map-selector";
+import { useSearchParams } from "next/navigation";
 
 type WaterMapProps = {
   onFeatureSelect: (feature: { layerId: string; properties: any }) => void;
@@ -37,7 +38,6 @@ const SATELLITE_STYLE = {
   sources: {
     satellite: {
       type: "raster" as const,
-      // Nouvelle URL de la Géoplateforme IGN (Data GeoPF)
       tiles: [
         "https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=ORTHOIMAGERY.ORTHOPHOTOS&STYLE=normal&FORMAT=image/jpeg&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}"
       ],
@@ -48,13 +48,60 @@ const SATELLITE_STYLE = {
   },
   layers: [{ id: "satellite", type: "raster" as const, source: "satellite" }],
 };
-// ----------------------------------------------------------------
 
 export function WaterMap({ onFeatureSelect }: WaterMapProps) {
-  const { activeLayerIds } = useMapStore();
+  // On récupère toggleLayer en plus de activeLayerIds depuis le store
+  const { activeLayerIds, toggleLayer } = useMapStore();
   const mapRef = useRef<MapRef>(null);
   
-  // État pour gérer le fond de carte actif
+  // État pour savoir si le WebGL de MapLibre est prêt à recevoir des commandes
+  const [isMapLoaded, setIsMapLoaded] = useState(false);
+  const searchParams = useSearchParams();
+
+  // Écoute des paramètres d'URL pour le recentrage depuis les favoris
+  useEffect(() => {
+    // Si la carte n'est pas encore dessinée, on attend
+    if (!isMapLoaded) return;
+
+    const focusId = searchParams.get("focusId");
+    const lat = searchParams.get("lat");
+    const lng = searchParams.get("lng");
+    const layerId = searchParams.get("layerId");
+
+    if (focusId && lat && lng && layerId && mapRef.current) {
+      const latitude = parseFloat(lat);
+      const longitude = parseFloat(lng);
+
+      // 1. Activer la couche si elle n'est pas déjà visible
+      if (!activeLayerIds.includes(layerId)) {
+        toggleLayer(layerId);
+      }
+
+      // 2. Léger délai pour s'assurer que la carte et la couche sont prêtes
+      setTimeout(() => {
+        // Le survol
+        mapRef.current?.flyTo({
+          center: [longitude, latitude],
+          zoom: 15,
+          duration: 2500,
+          essential: true
+        });
+
+        // L'ouverture du panneau latéral
+        onFeatureSelect({
+          layerId,
+          properties: { 
+            id: focusId, 
+            code_bss: focusId, 
+            nom: focusId, // Nom temporaire en attendant le chargement complet des données
+            longitude, 
+            latitude 
+          }
+        });
+      }, 200);
+    }
+  }, [searchParams, onFeatureSelect, isMapLoaded, activeLayerIds, toggleLayer]);
+  
   const [mapType, setMapType] = useState<"plan" | "satellite">("plan");
 
   const [datasets, setDatasets] = useState<Record<string, any>>({});
@@ -64,7 +111,7 @@ export function WaterMap({ onFeatureSelect }: WaterMapProps) {
   const [bounds, setBounds] = useState<[number, number, number, number]>([-5.5, 41.3, 9.6, 51.1]);
   const [zoom, setZoom] = useState(FRANCE_VIEW.zoom);
 
-  // MOTEUR DE CHARGEMENT INTELLIGENT (Lazy Loading)
+  // MOTEUR DE CHARGEMENT INTELLIGENT
   useEffect(() => {
     activeLayerIds.forEach((layerId) => {
       if (!datasets[layerId] && !loadingLayers.has(layerId)) {
@@ -119,12 +166,14 @@ export function WaterMap({ onFeatureSelect }: WaterMapProps) {
       <Map
         ref={mapRef}
         initialViewState={FRANCE_VIEW}
-        // Bascule dynamique entre le style OSM et Esri Satellite
         mapStyle={mapType === "plan" ? OSM_STYLE : SATELLITE_STYLE}
         style={{ width: "100%", height: "100%" }}
         cooperativeGestures={false}
         onMove={updateMapState}
-        onLoad={updateMapState}
+        onLoad={() => {
+          updateMapState();
+          setIsMapLoaded(true); // Signal que la carte est prête
+        }}
       >
         <SearchBar />
 
@@ -137,7 +186,6 @@ export function WaterMap({ onFeatureSelect }: WaterMapProps) {
           const visibleClusters = sc.getClusters(bounds, Math.floor(zoom));
 
           const isQualityLayer = layer.id === "qualite-nappes";
-          // Ajustement des couleurs : Si on est en mode satellite, une bordure blanche épaisse aide à bien voir les points sur les fonds sombres
           const markerColor = isQualityLayer ? "bg-purple-600" : "bg-teal-700";
           const pointColor = isQualityLayer ? "bg-purple-500 hover:bg-purple-700" : "bg-teal-500 hover:bg-teal-700";
           const borderStyle = mapType === "satellite" ? "border-2 border-white shadow-lg" : "border-2 border-white shadow-md";
@@ -184,7 +232,6 @@ export function WaterMap({ onFeatureSelect }: WaterMapProps) {
 
         <NavigationControl position="bottom-right" showCompass={false} />
         
-        {/* Ajout du sélecteur de fond de carte */}
         <BaseMapSelector mapType={mapType} onChange={setMapType} />
         
       </Map>
