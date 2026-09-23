@@ -7,6 +7,7 @@ import { MAP_LAYERS } from "@/config/map-layers";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { QualityChart } from "@/components/charts/quality-chart";
 import { PiezometryChart } from "@/components/charts/piezometry-chart";
+import { PiezometryIndicator } from "@/components/charts/piezometry-indicator";
 
 export type SelectedFeature = {
   layerId: string;
@@ -18,7 +19,53 @@ type AssetSidePanelProps = {
   onClose: () => void;
 };
 
-// Sous-composant : Gestion dynamique de l'onglet Niveaux avec fallback sur le plus proche
+// 1. Outil mathématique pour calculer la vraie distance
+function getDistanceInKm(lat1: number, lon1: number, lat2: number, lon2: number) {
+  if (!lat1 || !lon1 || !lat2 || !lon2) return 999;
+  const R = 6371; 
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+}
+
+// 2. Moteur de recherche spatial par Bounding Box (sécurisé)
+const fetchNearestStation = async (type: "niveaux_nappes" | "qualite_nappes", lat: number, lon: number) => {
+  try {
+    const RADIUS_KM = 20; // Rayon de recherche de 20 km
+    const dLat = RADIUS_KM / 111.32;
+    const dLon = RADIUS_KM / (111.32 * Math.cos(lat * (Math.PI / 180)));
+    const bbox = `${(lon - dLon).toFixed(4)},${(lat - dLat).toFixed(4)},${(lon + dLon).toFixed(4)},${(lat + dLat).toFixed(4)}`;
+
+    const url = `https://hubeau.eaufrance.fr/api/v1/${type}/stations?bbox=${bbox}&size=100`;
+    const res = await fetch(url);
+    
+    // Sécurité si l'API répond avec une erreur (ex: 404, 500)
+    if (!res.ok) return null; 
+    
+    const json = await res.json();
+    if (!json.data || json.data.length === 0) return null;
+
+    // On trie les résultats locaux par distance mathématique réelle
+    const sorted = json.data.map((st: any) => {
+      const stLon = st.geometry?.coordinates?.[0] ?? st.longitude ?? st.x;
+      const stLat = st.geometry?.coordinates?.[1] ?? st.geometry?.coordinates?.[1] ?? st.latitude ?? st.y;
+      return {
+        ...st,
+        calculatedDist: getDistanceInKm(lat, lon, stLat, stLon)
+      };
+    }).sort((a: any, b: any) => a.calculatedDist - b.calculatedDist);
+
+    return sorted[0];
+  } catch (error) {
+    console.error(`Erreur lors de la recherche de la station (${type}) la plus proche:`, error);
+    return null;
+  }
+};
+
+// 3. Contenu de l'onglet Niveaux
 function LevelsTabContent({ feature }: { feature: SelectedFeature }) {
   const { layerId, properties } = feature;
   const [nearest, setNearest] = useState<any>(null);
@@ -31,21 +78,15 @@ function LevelsTabContent({ feature }: { feature: SelectedFeature }) {
   useEffect(() => {
     if (layerId === "qualite-nappes" && lat && lon) {
       setIsSearching(true);
-      fetch(`https://hubeau.eaufrance.fr/api/v1/niveaux_nappes/stations?latitude=${lat}&longitude=${lon}&distance=25&size=1`)
-        .then((r) => r.json())
-        .then((json) => {
-          setNearest(json.data?.[0] || null);
-        })
-        .catch(() => setNearest(null))
+      fetchNearestStation("niveaux_nappes", lat, lon)
+        .then(setNearest)
         .finally(() => setIsSearching(false));
     } else {
       setNearest(null);
     }
   }, [layerId, lat, lon]);
 
-  if (layerId === "hubeau-piezometrie") {
-    return <PiezometryChart bssId={bssId} />;
-  }
+  if (layerId === "hubeau-piezometrie") return <PiezometryChart bssId={bssId} />;
 
   if (isSearching) {
     return (
@@ -57,14 +98,13 @@ function LevelsTabContent({ feature }: { feature: SelectedFeature }) {
   }
 
   if (nearest) {
-    const dist = nearest.distance ? nearest.distance.toFixed(1) : "?";
     return (
       <div className="space-y-3">
         <div className="bg-teal-50 border border-teal-200 rounded-lg p-3 text-xs text-teal-900 flex items-start gap-2">
           <MapPin className="w-4 h-4 text-teal-600 shrink-0 mt-0.5" />
           <div>
-            <p className="font-semibold">Piézomètre le plus proche (à {dist} km)</p>
-            <p className="text-teal-700 font-medium">{nearest.nom_commune || nearest.code_bss} ({nearest.code_bss})</p>
+            <p className="font-semibold">Piézomètre lié le plus proche (à {nearest.calculatedDist.toFixed(1)} km)</p>
+            <p className="text-teal-700 font-medium">{nearest.nom_commune} ({nearest.code_bss})</p>
           </div>
         </div>
         <PiezometryChart bssId={nearest.code_bss} />
@@ -74,12 +114,12 @@ function LevelsTabContent({ feature }: { feature: SelectedFeature }) {
 
   return (
     <div className="flex flex-col items-center justify-center h-48 bg-slate-50 border border-slate-100 rounded-lg p-4 text-center text-slate-500 text-xs">
-      Aucun piézomètre trouvé dans un rayon de 25 km autour de cette station.
+      Aucun piézomètre trouvé dans un rayon de 20 km autour de cette station de qualité.
     </div>
   );
 }
 
-// Sous-composant : Gestion dynamique de l'onglet Qualité avec fallback sur le plus proche
+// 4. Contenu de l'onglet Qualité
 function QualityTabContent({ feature }: { feature: SelectedFeature }) {
   const { layerId, properties } = feature;
   const [nearest, setNearest] = useState<any>(null);
@@ -89,24 +129,19 @@ function QualityTabContent({ feature }: { feature: SelectedFeature }) {
   const lat = properties.latitude;
   const lon = properties.longitude;
 
-  useEffect(() => {
+useEffect(() => {
     if (layerId === "hubeau-piezometrie" && lat && lon) {
       setIsSearching(true);
-      fetch(`https://hubeau.eaufrance.fr/api/v1/qualite_nappes/stations?latitude=${lat}&longitude=${lon}&distance=25&size=1`)
-        .then((r) => r.json())
-        .then((json) => {
-          setNearest(json.data?.[0] || null);
-        })
-        .catch(() => setNearest(null))
+      // Correction ici : l'API utilise bien "qualite_nappes" (avec un tiret du bas) !
+      fetchNearestStation("qualite_nappes", lat, lon)
+        .then(setNearest)
         .finally(() => setIsSearching(false));
     } else {
       setNearest(null);
     }
   }, [layerId, lat, lon]);
 
-  if (layerId === "qualite-nappes") {
-    return <QualityChart bssId={bssId} />;
-  }
+  if (layerId === "qualite-nappes") return <QualityChart bssId={bssId} />;
 
   if (isSearching) {
     return (
@@ -118,14 +153,14 @@ function QualityTabContent({ feature }: { feature: SelectedFeature }) {
   }
 
   if (nearest) {
-    const dist = nearest.distance ? nearest.distance.toFixed(1) : "?";
+    const nomStation = nearest.nom_pe || nearest.nom_commune || "Station Inconnue";
     return (
       <div className="space-y-3">
         <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 text-xs text-purple-900 flex items-start gap-2">
           <MapPin className="w-4 h-4 text-purple-600 shrink-0 mt-0.5" />
           <div>
-            <p className="font-semibold">Station de qualité la plus proche (à {dist} km)</p>
-            <p className="text-purple-700 font-medium">{nearest.nom_commune || nearest.bss_id} ({nearest.bss_id})</p>
+            <p className="font-semibold">Station de qualité liée (à {nearest.calculatedDist.toFixed(1)} km)</p>
+            <p className="text-purple-700 font-medium">{nomStation} ({nearest.bss_id})</p>
           </div>
         </div>
         <QualityChart bssId={nearest.bss_id} />
@@ -135,11 +170,12 @@ function QualityTabContent({ feature }: { feature: SelectedFeature }) {
 
   return (
     <div className="flex flex-col items-center justify-center h-48 bg-slate-50 border border-slate-100 rounded-lg p-4 text-center text-slate-500 text-xs">
-      Aucune station de qualité trouvée dans un rayon de 25 km autour de ce piézomètre.
+      Aucune station de qualité trouvée dans un rayon de 20 km autour de ce piézomètre.
     </div>
   );
 }
 
+// Composant Principal
 export function AssetSidePanel({ feature, onClose }: AssetSidePanelProps) {
   const { activeLayerIds } = useMapStore();
 
@@ -154,17 +190,14 @@ export function AssetSidePanel({ feature, onClose }: AssetSidePanelProps) {
           
           <div className="flex items-center justify-between p-4 border-b border-slate-100 bg-slate-50/50">
             <div>
-              <h2 className="font-semibold text-slate-800 text-lg leading-tight">
+              <h2 className="font-semibold text-slate-800 text-lg leading-tight pr-2">
                 {properties.nom || properties.nom_commune || "Station Inconnue"}
               </h2>
               <p className="text-xs font-medium text-slate-500 mt-1 uppercase tracking-wider">
                 BSS : {properties.id || properties.code_bss || "N/A"}
               </p>
             </div>
-            <button
-              onClick={onClose}
-              className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
-            >
+            <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors">
               <X className="w-5 h-5" />
             </button>
           </div>
@@ -205,49 +238,65 @@ export function AssetSidePanel({ feature, onClose }: AssetSidePanelProps) {
 
               <div className="flex-1 overflow-y-auto pr-2 space-y-4">
                 
-                {/* ONGLET 1 : Identité */}
                 <TabsContent value="identity" className="m-0 space-y-4">
+                  {/* NOUVEAU BLOC : Widget de tendance (Uniquement sur les Piézomètres) */}
+                  {layerId === "hubeau-piezometrie" && (
+                    <PiezometryIndicator bssId={properties.id || properties.code_bss} />
+                  )}
+
                   <div className="bg-slate-50 p-4 rounded-lg border border-slate-100">
                     <h3 className="text-sm font-semibold text-slate-700 mb-3">Informations générales</h3>
                     <dl className="space-y-2.5 text-sm">
                       <div className="flex justify-between border-b border-slate-200/50 pb-1.5">
                         <dt className="text-slate-500">Commune</dt>
-                        <dd className="font-medium text-slate-900">{properties.nom_commune || properties.nom || "N/A"}</dd>
+                        <dd className="font-medium text-slate-900 text-right">{properties.nom_commune || properties.nom || "N/A"}</dd>
                       </div>
                       {properties.code_commune_insee && (
                         <div className="flex justify-between border-b border-slate-200/50 pb-1.5">
                           <dt className="text-slate-500">Code INSEE</dt>
-                          <dd className="font-medium text-slate-900">{properties.code_commune_insee}</dd>
+                          <dd className="font-medium text-slate-900 text-right">{properties.code_commune_insee}</dd>
                         </div>
                       )}
                       <div className="flex justify-between border-b border-slate-200/50 pb-1.5">
                         <dt className="text-slate-500">Département</dt>
-                        <dd className="font-medium text-slate-900">{properties.departement || properties.nom_departement || "N/A"}</dd>
+                        <dd className="font-medium text-slate-900 text-right">{properties.departement || properties.nom_departement || "N/A"}</dd>
                       </div>
+                      {properties.latitude && properties.longitude && (
+                        <div className="flex justify-between border-b border-slate-200/50 pb-1.5">
+                          <dt className="text-slate-500">Coordonnées GPS</dt>
+                          <dd className="font-medium text-slate-900 text-right">{properties.latitude.toFixed(4)}°, {properties.longitude.toFixed(4)}°</dd>
+                        </div>
+                      )}
                       <div className="flex justify-between border-b border-slate-200/50 pb-1.5">
-                        <dt className="text-slate-500">Profondeur</dt>
-                        <dd className="font-medium text-slate-900">
+                        <dt className="text-slate-500">Profondeur station</dt>
+                        <dd className="font-medium text-slate-900 text-right">
                           {properties.profondeur ?? properties.profondeur_investigation ?? "Non renseignée"}
                           {(properties.profondeur || properties.profondeur_investigation) ? " m" : ""}
                         </dd>
                       </div>
-                      {properties.altitude_station && (
+                      {properties.altitude_station !== undefined && properties.altitude_station !== null && (
                         <div className="flex justify-between border-b border-slate-200/50 pb-1.5">
                           <dt className="text-slate-500">Altitude sol</dt>
-                          <dd className="font-medium text-slate-900">{properties.altitude_station} m</dd>
+                          <dd className="font-medium text-slate-900 text-right">{properties.altitude_station} m</dd>
+                        </div>
+                      )}
+                      {properties.altitude_repere !== undefined && properties.altitude_repere !== null && (
+                        <div className="flex justify-between border-b border-slate-200/50 pb-1.5">
+                          <dt className="text-slate-500">Altitude repère</dt>
+                          <dd className="font-medium text-slate-900 text-right">{properties.altitude_repere} m</dd>
                         </div>
                       )}
                     </dl>
                   </div>
 
-                  {(properties.nb_mesures_piezo || properties.date_debut_mesure) && (
+                  {(properties.nb_mesures_piezo || properties.date_debut_mesure || properties.date_fin_mesure) && (
                     <div className="bg-slate-50 p-4 rounded-lg border border-slate-100">
-                      <h3 className="text-sm font-semibold text-slate-700 mb-3">Historique des mesures</h3>
+                      <h3 className="text-sm font-semibold text-slate-700 mb-3">Référentiel ADES</h3>
                       <dl className="space-y-2.5 text-sm">
                         {properties.nb_mesures_piezo && (
                           <div className="flex justify-between border-b border-slate-200/50 pb-1.5">
-                            <dt className="text-slate-500">Nombre de mesures</dt>
-                            <dd className="font-semibold text-teal-700">
+                            <dt className="text-slate-500">Mesures certifiées</dt>
+                            <dd className="font-semibold text-teal-700 text-right">
                               {new Intl.NumberFormat("fr-FR").format(properties.nb_mesures_piezo)}
                             </dd>
                           </div>
@@ -255,8 +304,19 @@ export function AssetSidePanel({ feature, onClose }: AssetSidePanelProps) {
                         {properties.date_debut_mesure && (
                           <div className="flex justify-between border-b border-slate-200/50 pb-1.5">
                             <dt className="text-slate-500">Première mesure</dt>
-                            <dd className="font-medium text-slate-900">
+                            <dd className="font-medium text-slate-900 text-right">
                               {new Date(properties.date_debut_mesure).toLocaleDateString("fr-FR")}
+                            </dd>
+                          </div>
+                        )}
+                        {properties.date_fin_mesure && (
+                          <div className="flex justify-between border-b border-slate-200/50 pb-1.5">
+                            <dt className="text-slate-500 flex flex-col">
+                              <span>Dernière mesure</span>
+                              <span className="text-[10px] font-normal text-slate-400 leading-tight mt-0.5">(Validée au registre)</span>
+                            </dt>
+                            <dd className="font-medium text-slate-900 text-right mt-1">
+                              {new Date(properties.date_fin_mesure).toLocaleDateString("fr-FR")}
                             </dd>
                           </div>
                         )}
@@ -265,13 +325,11 @@ export function AssetSidePanel({ feature, onClose }: AssetSidePanelProps) {
                   )}
                 </TabsContent>
 
-                {/* ONGLET 2 : Niveaux */}
-                <TabsContent value="levels" className="m-0">
+                <TabsContent value="levels" className="m-0 h-full">
                   <LevelsTabContent feature={feature} />
                 </TabsContent>
 
-                {/* ONGLET 3 : Qualité */}
-                <TabsContent value="quality" className="m-0">
+                <TabsContent value="quality" className="m-0 h-full">
                   <QualityTabContent feature={feature} />
                 </TabsContent>
 
@@ -323,7 +381,7 @@ export function AssetSidePanel({ feature, onClose }: AssetSidePanelProps) {
       </h3>
       <p className="mt-2 text-sm leading-relaxed text-slate-500">
         {activeLayerIds.length === 1
-          ? "Sélectionnez une station sur la carte pour consulter ses relevés et sa chronique temporelle."
+          ? "Sélectionnez une station sur la carte pour consulter ses relevés."
           : `${activeLayerIds.length} couches actives. Cliquez sur un élément de la carte pour en afficher les détails.`}
       </p>
 
