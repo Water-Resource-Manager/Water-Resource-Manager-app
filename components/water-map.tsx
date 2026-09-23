@@ -9,6 +9,7 @@ import { useMapStore } from "@/store/map-store";
 import { MAP_LAYERS } from "@/config/map-layers";
 import { LayerSelector } from "@/components/map/layer-selector";
 import { SearchBar } from "@/components/map/search-bar";
+import { BaseMapSelector } from "@/components/map/base-map-selector";
 
 type WaterMapProps = {
   onFeatureSelect: (feature: { layerId: string; properties: any }) => void;
@@ -16,6 +17,7 @@ type WaterMapProps = {
 
 const FRANCE_VIEW = { longitude: 2.2137, latitude: 46.2276, zoom: 5.5 };
 
+// --- FONDS DE CARTE (Styles MapLibre avec tuiles publiques) ---
 const OSM_STYLE = {
   version: 8 as const,
   sources: {
@@ -30,11 +32,31 @@ const OSM_STYLE = {
   layers: [{ id: "osm", type: "raster" as const, source: "osm" }],
 };
 
+const SATELLITE_STYLE = {
+  version: 8 as const,
+  sources: {
+    satellite: {
+      type: "raster" as const,
+      // Nouvelle URL de la Géoplateforme IGN (Data GeoPF)
+      tiles: [
+        "https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=ORTHOIMAGERY.ORTHOPHOTOS&STYLE=normal&FORMAT=image/jpeg&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}"
+      ],
+      tileSize: 256,
+      attribution: "&copy; IGN-F/Géoportail",
+      maxzoom: 19,
+    },
+  },
+  layers: [{ id: "satellite", type: "raster" as const, source: "satellite" }],
+};
+// ----------------------------------------------------------------
+
 export function WaterMap({ onFeatureSelect }: WaterMapProps) {
   const { activeLayerIds } = useMapStore();
   const mapRef = useRef<MapRef>(null);
   
-  // NOUVEAU : Un dictionnaire pour stocker les données de CHAQUE couche
+  // État pour gérer le fond de carte actif
+  const [mapType, setMapType] = useState<"plan" | "satellite">("plan");
+
   const [datasets, setDatasets] = useState<Record<string, any>>({});
   const [clustersMap, setClustersMap] = useState<Record<string, Supercluster>>({});
   const [loadingLayers, setLoadingLayers] = useState<Set<string>>(new Set());
@@ -45,7 +67,6 @@ export function WaterMap({ onFeatureSelect }: WaterMapProps) {
   // MOTEUR DE CHARGEMENT INTELLIGENT (Lazy Loading)
   useEffect(() => {
     activeLayerIds.forEach((layerId) => {
-      // Si la donnée n'est pas encore chargée ni en cours de chargement
       if (!datasets[layerId] && !loadingLayers.has(layerId)) {
         
         setLoadingLayers((prev) => new Set(prev).add(layerId));
@@ -60,7 +81,6 @@ export function WaterMap({ onFeatureSelect }: WaterMapProps) {
             .then((data) => {
               console.log(`✅ Couche [${layerId}] chargée : ${data.features?.length} points`);
               
-              // On crée un moteur de cluster dédié à cette couche
               const sc = new Supercluster({ radius: 50, maxZoom: 14 });
               sc.load(data.features);
 
@@ -99,27 +119,28 @@ export function WaterMap({ onFeatureSelect }: WaterMapProps) {
       <Map
         ref={mapRef}
         initialViewState={FRANCE_VIEW}
-        mapStyle={OSM_STYLE}
+        // Bascule dynamique entre le style OSM et Esri Satellite
+        mapStyle={mapType === "plan" ? OSM_STYLE : SATELLITE_STYLE}
         style={{ width: "100%", height: "100%" }}
         cooperativeGestures={false}
         onMove={updateMapState}
         onLoad={updateMapState}
       >
         <SearchBar />
-        
+
         {MAP_LAYERS.map(layer => {
           if (!activeLayerIds.includes(layer.id)) return null;
 
-          // On récupère le supercluster spécifique à cette couche
           const sc = clustersMap[layer.id];
           if (!sc) return null;
 
-          // On demande les points visibles actuellement
           const visibleClusters = sc.getClusters(bounds, Math.floor(zoom));
 
           const isQualityLayer = layer.id === "qualite-nappes";
+          // Ajustement des couleurs : Si on est en mode satellite, une bordure blanche épaisse aide à bien voir les points sur les fonds sombres
           const markerColor = isQualityLayer ? "bg-purple-600" : "bg-teal-700";
           const pointColor = isQualityLayer ? "bg-purple-500 hover:bg-purple-700" : "bg-teal-500 hover:bg-teal-700";
+          const borderStyle = mapType === "satellite" ? "border-2 border-white shadow-lg" : "border-2 border-white shadow-md";
 
           return visibleClusters.map((cluster, index) => {
             const [longitude, latitude] = cluster.geometry.coordinates;
@@ -130,7 +151,7 @@ export function WaterMap({ onFeatureSelect }: WaterMapProps) {
               return (
                 <Marker key={`${layer.id}-cluster-${cluster.id}`} longitude={longitude} latitude={latitude}>
                   <div
-                    className={`${markerColor} text-white rounded-full flex items-center justify-center font-bold border-2 border-white shadow-md cursor-pointer transition-colors hover:brightness-110`}
+                    className={`${markerColor} text-white rounded-full flex items-center justify-center font-bold ${borderStyle} cursor-pointer transition-colors hover:brightness-110`}
                     style={{ width: `${size}px`, height: `${size}px`, fontSize: pointCount > 999 ? '11px' : '13px' }}
                     onClick={(e) => {
                       e.stopPropagation();
@@ -147,7 +168,7 @@ export function WaterMap({ onFeatureSelect }: WaterMapProps) {
             return (
               <Marker key={`${layer.id}-station-${cluster.properties.id || cluster.properties.code_bss || index}`} longitude={longitude} latitude={latitude}>
                 <div
-                  className={`w-4 h-4 ${pointColor} border-2 border-white rounded-full shadow-sm cursor-pointer hover:scale-150 transition-transform`}
+                  className={`w-4 h-4 ${pointColor} rounded-full cursor-pointer hover:scale-150 transition-transform ${borderStyle}`}
                   onClick={(e) => {
                     e.stopPropagation();
                     onFeatureSelect({
@@ -162,6 +183,10 @@ export function WaterMap({ onFeatureSelect }: WaterMapProps) {
         })}
 
         <NavigationControl position="bottom-right" showCompass={false} />
+        
+        {/* Ajout du sélecteur de fond de carte */}
+        <BaseMapSelector mapType={mapType} onChange={setMapType} />
+        
       </Map>
       <LayerSelector />
     </div>
