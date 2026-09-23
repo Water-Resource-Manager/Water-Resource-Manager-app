@@ -8,6 +8,7 @@ import Supercluster from "supercluster";
 import { useMapStore } from "@/store/map-store";
 import { MAP_LAYERS } from "@/config/map-layers";
 import { LayerSelector } from "@/components/map/layer-selector";
+import { SearchBar } from "@/components/map/search-bar";
 
 type WaterMapProps = {
   onFeatureSelect: (feature: { layerId: string; properties: any }) => void;
@@ -104,6 +105,8 @@ export function WaterMap({ onFeatureSelect }: WaterMapProps) {
         onMove={updateMapState}
         onLoad={updateMapState}
       >
+        <SearchBar />
+        
         {MAP_LAYERS.map(layer => {
           if (!activeLayerIds.includes(layer.id)) return null;
 
