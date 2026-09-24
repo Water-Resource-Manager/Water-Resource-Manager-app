@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowRight, AlertTriangle, Activity, Database, CheckCircle2 } from "lucide-react";
+import { UserProfile } from "@/components/layout/user-profile";
 
 // 1. Import du composant de favoris
 import { StationsFavorites } from "@/components/stations/stations-favorites";
@@ -7,30 +8,36 @@ import { StationsFavorites } from "@/components/stations/stations-favorites";
 export default function DashboardPage() {
   return (
     <div className="p-8 space-y-8 max-w-6xl mx-auto">
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-wider text-teal-800">
-          DSP Eau - Bassin Hydrologique
-        </p>
-        <h1 className="text-3xl font-bold text-slate-900 tracking-tight mt-1">
-          HydroManager
-        </h1>
-        <p className="text-slate-600 mt-2 max-w-2xl">
-          Pilotez la ressource en eau : cartographie des ouvrages, chroniques piézométriques et prévisions de recharge de nappe.
-        </p>
-        <div className="flex gap-3 mt-4">
-          <Link
-            href="/map"
-            className="inline-flex items-center gap-2 rounded-lg bg-teal-700 px-4 py-2.5 text-sm font-medium text-white hover:bg-teal-800 transition-colors shadow-sm"
-          >
-            Ouvrir la carte <ArrowRight className="h-4 w-4" />
-          </Link>
-          <Link
-            href="/analytics"
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
-          >
-            Analyse temporelle
-          </Link>
+      {/* EN-TÊTE MODIFIÉ ICI */}
+      <div className="flex justify-between items-start">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wider text-teal-800">
+            DSP Eau - Bassin Hydrologique
+          </p>
+          <h1 className="text-3xl font-bold text-slate-900 tracking-tight mt-1">
+            HydroManager
+          </h1>
+          <p className="text-slate-600 mt-2 max-w-2xl">
+            Pilotez la ressource en eau : cartographie des ouvrages, chroniques piézométriques et prévisions de recharge de nappe.
+          </p>
+          <div className="flex gap-3 mt-4">
+            <Link
+              href="/map"
+              className="inline-flex items-center gap-2 rounded-lg bg-teal-700 px-4 py-2.5 text-sm font-medium text-white hover:bg-teal-800 transition-colors shadow-sm"
+            >
+              Ouvrir la carte <ArrowRight className="h-4 w-4" />
+            </Link>
+            <Link
+              href="/analytics"
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+            >
+              Analyse temporelle
+            </Link>
+          </div>
         </div>
+
+        {/* LE WIDGET UTILISATEUR */}
+        <UserProfile />
       </div>
 
       {/* Cartes KPI */}
