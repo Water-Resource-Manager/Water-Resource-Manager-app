@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-// J'ai regroupé tous les imports Lucide ici, en ajoutant 'Star'
 import { Map, MousePointerClick, X, Info, Droplets, FlaskConical, MapPin, Loader2, Star } from "lucide-react";
 import { useMapStore } from "@/store/map-store";
 import { MAP_LAYERS } from "@/config/map-layers";
@@ -176,9 +175,9 @@ function QualityTabContent({ feature }: { feature: SelectedFeature }) {
 
 // Composant Principal
 export function AssetSidePanel({ feature, onClose }: AssetSidePanelProps) {
-  // Les hooks doivent TOUJOURS être appelés au niveau racine du composant
   const { activeLayerIds } = useMapStore();
-  const { toggleFavorite, isFavorite } = useFavoritesStore();
+  // NOUVEAU : On importe les méthodes synchronisées avec l'API
+  const { favorites, addFavorite, removeFavorite } = useFavoritesStore();
 
   if (feature) {
     const { layerId, properties } = feature;
@@ -188,16 +187,24 @@ export function AssetSidePanel({ feature, onClose }: AssetSidePanelProps) {
     // Préparation des données pour le favori
     const stationId = properties.id || properties.code_bss;
     const stationName = properties.nom || properties.nom_commune || "Station Inconnue";
-    const isFav = stationId ? isFavorite(stationId) : false;
+    
+    // NOUVEAU : Vérification de la présence dans le tableau des favoris
+    const isFav = stationId ? favorites.some((f) => f.id === stationId) : false;
 
+    // NOUVEAU : Fonction de clic adaptée
     const handleToggleFavorite = () => {
       if (!stationId) return;
-      toggleFavorite({
-        id: stationId,
-        name: stationName,
-        type: layerId as "piezometrie" | "qualite-nappes",
-        coordinates: [properties.longitude || 0, properties.latitude || 0],
-      });
+      
+      if (isFav) {
+        removeFavorite(stationId);
+      } else {
+        addFavorite({
+          id: stationId,
+          name: stationName,
+          type: layerId as "piezometrie" | "qualite-nappes",
+          coordinates: [properties.longitude || 0, properties.latitude || 0],
+        });
+      }
     };
 
     if (isGroundwaterResource) {
@@ -214,7 +221,6 @@ export function AssetSidePanel({ feature, onClose }: AssetSidePanelProps) {
               </p>
             </div>
             
-            {/* BOUTONS D'ACTION (Favori + Fermer) */}
             <div className="flex items-center space-x-1 shrink-0">
               <button
                 onClick={handleToggleFavorite}

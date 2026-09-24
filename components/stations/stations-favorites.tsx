@@ -61,13 +61,16 @@ function CompactTrend({ bssId }: { bssId: string }) {
 }
 
 export function StationsFavorites() {
-  const { favorites, removeFavorite } = useFavoritesStore();
+  // 1. Récupère la nouvelle fonction fetchFavorites du store
+  const { favorites, removeFavorite, fetchFavorites } = useFavoritesStore();
   const [mounted, setMounted] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
     setMounted(true);
-  }, []);
+    // 2. Déclenche l'appel réseau au montage du composant
+    fetchFavorites();
+  }, [fetchFavorites]);
 
   if (!mounted) return null;
 
