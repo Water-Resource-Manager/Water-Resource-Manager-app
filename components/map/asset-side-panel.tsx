@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { Map, MousePointerClick, X, Info, Droplets, FlaskConical, MapPin, Loader2, Star } from "lucide-react";
 import { useMapStore } from "@/store/map-store";
-import { MAP_LAYERS } from "@/config/map-layers";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { QualityChart } from "@/components/charts/quality-chart";
 import { PiezometryChart } from "@/components/charts/piezometry-chart";
@@ -175,7 +174,7 @@ function QualityTabContent({ feature }: { feature: SelectedFeature }) {
 
 // Composant Principal
 export function AssetSidePanel({ feature, onClose }: AssetSidePanelProps) {
-  const { activeLayerIds } = useMapStore();
+  const { activeLayerIds, layers } = useMapStore();
   // NOUVEAU : On importe les méthodes synchronisées avec l'API
   const { favorites, addFavorite, removeFavorite } = useFavoritesStore();
 
@@ -406,7 +405,7 @@ export function AssetSidePanel({ feature, onClose }: AssetSidePanelProps) {
     );
   }
 
-  const activeLayersDetails = MAP_LAYERS.filter((l) => activeLayerIds.includes(l.id));
+  const activeLayersDetails = layers.filter((l) => activeLayerIds.includes(l.id));
 
   return (
     <aside className="flex w-[380px] shrink-0 flex-col border-l border-slate-200/80 bg-white/95 p-8 backdrop-blur z-20 h-full justify-center items-center text-center">

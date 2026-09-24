@@ -3,14 +3,19 @@
 import { useState, useRef, useEffect } from "react";
 import { Layers, X } from "lucide-react";
 import { useMapStore } from "@/store/map-store";
-import { MAP_LAYERS } from "@/config/map-layers";
 
 export function LayerSelector() {
-  const { activeLayerIds, toggleLayer } = useMapStore();
+  // 1. On récupère layers et fetchLayers depuis le store (BFF)
+  const { activeLayerIds, toggleLayer, layers, fetchLayers } = useMapStore();
   
   // État pour gérer l'ouverture/fermeture du panneau (fermé par défaut)
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // 2. On charge les couches au montage du composant
+  useEffect(() => {
+    fetchLayers();
+  }, [fetchLayers]);
 
   // Ferme le panneau si l'utilisateur clique en dehors
   useEffect(() => {
@@ -48,7 +53,8 @@ export function LayerSelector() {
           </div>
           
           <div className="space-y-3">
-            {MAP_LAYERS.map((layer) => (
+            {/* 3. On utilise "layers" de l'API à la place de "MAP_LAYERS" statique */}
+            {layers.map((layer) => (
               <label 
                 key={layer.id} 
                 className="group flex cursor-pointer items-start gap-3"

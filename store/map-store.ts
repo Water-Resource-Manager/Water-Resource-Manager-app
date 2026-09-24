@@ -1,27 +1,44 @@
-import { create } from "zustand";
-import { MAP_LAYERS } from "@/config/map-layers";
+import { create } from 'zustand';
 
-type MapState = {
-  // Tableau contenant les ID des couches actuellement cochées/actives
-  activeLayerIds: string[];
-  
-  // Fonction pour cocher/décocher une couche
-  toggleLayer: (layerId: string) => void;
+export type LayerConfig = {
+  id: string;
+  name: string;
+  description?: string;
+  color: string;
+  sourceUrl?: string;
 };
 
-export const useMapStore = create<MapState>((set) => ({
-  // Par défaut, on active les couches qui ont "visibleByDefault: true" dans la config
-  activeLayerIds: MAP_LAYERS.filter((layer) => layer.visibleByDefault).map((l) => l.id),
+type MapStore = {
+  activeLayerIds: string[];
+  layers: LayerConfig[];
+  isLayersLoaded: boolean;
+  toggleLayer: (layerId: string) => void;
+  fetchLayers: () => Promise<void>;
+};
+
+export const useMapStore = create<MapStore>((set, get) => ({
+  activeLayerIds: ['hubeau-piezometrie'], // On active la piézométrie par défaut
+  layers: [],
+  isLayersLoaded: false,
 
   toggleLayer: (layerId) =>
-    set((state) => {
-      const isAlreadyActive = state.activeLayerIds.includes(layerId);
-      if (isAlreadyActive) {
-        // Si elle est active, on la retire
-        return { activeLayerIds: state.activeLayerIds.filter((id) => id !== layerId) };
-      } else {
-        // Sinon, on l'ajoute
-        return { activeLayerIds: [...state.activeLayerIds, layerId] };
-      }
-    }),
+    set((state) => ({
+      activeLayerIds: state.activeLayerIds.includes(layerId)
+        ? state.activeLayerIds.filter((id) => id !== layerId)
+        : [...state.activeLayerIds, layerId],
+    })),
+
+  // Nouvelle méthode pour appeler l'API
+  fetchLayers: async () => {
+    if (get().isLayersLoaded) return;
+    try {
+      const res = await fetch('/api/config/layers');
+      if (!res.ok) throw new Error("Erreur réseau");
+      
+      const data = await res.json();
+      set({ layers: data, isLayersLoaded: true });
+    } catch (error) {
+      console.error("Erreur lors du chargement des couches:", error);
+    }
+  }
 }));
